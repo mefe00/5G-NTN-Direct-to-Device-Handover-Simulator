@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+backend/venv/
+venv/
+.venv/
+*.tle
+backend/starlink_cache.tle
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Ortam
+.env
+.env.local
+
+# Editör / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Build / geçici
+*.log
+dist/
+build/
