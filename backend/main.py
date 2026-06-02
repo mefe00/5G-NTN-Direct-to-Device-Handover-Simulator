@@ -558,6 +558,40 @@ async def initial_handover():
     sim.state = STATE_NTN_CONNECTED
 
 
+async def reacquire_satellite():
+    """
+    Bağlantı kaybından sonra (uydu ufuk altına indi) yeni uydu edin.
+    initial_handover'ın hafif versiyonu — durum zaten SCANNING.
+    """
+    visible = await asyncio.to_thread(scan_visible, MIN_ELEVATION_DEG, 12)
+    if not visible:
+        visible = await asyncio.to_thread(scan_visible, 5.0, 12)
+    if not visible:
+        add_log("Görünür uydu bulunamadı, tarama sürüyor...", "warn")
+        # NTN_CONNECTED'a dönme; sky_monitor bir sonraki turda tekrar deneyebilir
+        # ama selected None olduğu için tick erken döner. Kısa bekleyip tekrar dene.
+        await asyncio.sleep(1.0)
+        if sim.state == STATE_SCANNING:
+            asyncio.create_task(reacquire_satellite())
+        return
+    best = visible[0]
+    sim.selected_satellite = best["sat"]
+    sim.handover_count += 1
+    sim.handover_timeline.append({
+        "index": sim.handover_count,
+        "time": time.time(),
+        "t_rel": round(time.time() - sim.start_wall, 1),
+        "from_sat": "BAĞLANTI KAYBI",
+        "from_elev": None,
+        "to_sat": best["name"],
+        "to_elev": round(best["elevation"], 1),
+        "to_dist_km": round(best["distance_km"], 0),
+        "reason": "Yeniden edinim (link kaybı)",
+    })
+    add_log(f"Yeni uydu edinildi: {best['name']} (Elev {best['elevation']:.1f}°). NTN linki yeniden aktif.", "success")
+    sim.state = STATE_NTN_CONNECTED
+
+
 async def sky_monitor_supervisor():
     """
     sky_monitor'u izler; beklenmedik bir exception ile çökerse kısa bekleyip
@@ -644,8 +678,18 @@ async def _sky_monitor_tick():
                 add_log(f"{cur['name']} elevasyonu düşüyor ({cur_elev:.1f}° < {MIN_ELEVATION_DEG:.0f}°). Yeni hedef aranıyor...", "warn")
                 trigger = "elevation_drop"
                 target = best_other
+            elif cur_elev < 5.0:
+                # Uydu fiilen ufuk çizgisinde/altında ve alternatif yok:
+                # linke tutunmak fiziksel değil. Bağlantıyı bırak, yeniden tara.
+                add_log(f"{cur['name']} ufuk çizgisinin altına indi ({cur_elev:.1f}°) ve görünür alternatif yok. Bağlantı kaybedildi, yeniden taranıyor...", "error")
+                sim.selected_satellite = None
+                sim._warned_no_alt = False
+                sim.state = STATE_SCANNING
+                # Yeniden edinim görevini başlat
+                asyncio.create_task(reacquire_satellite())
+                return
             elif not sim._warned_no_alt:
-                add_log("Uyarı: alternatif uydu yok, mevcut link korunuyor.", "warn")
+                add_log("Uyarı: alternatif uydu yok, mevcut link zayıf ama korunuyor.", "warn")
                 sim._warned_no_alt = True
 
         # 2) Çok daha iyi bir aday belirdi (histerezis)
@@ -816,6 +860,37 @@ async def reset_sim():
 @app.get("/api/state")
 async def get_state():
     return {"state": sim.state, "satellites_loaded": len(sim.satellites)}
+
+
+@app.get("/api/snapshot")
+async def snapshot(since: int = 0):
+    """
+    WebSocket fallback: HTTP polling için anlık tam durum.
+    `since` parametresi = istemcinin elindeki son log indeksi; sadece yeni loglar döner.
+    Frontend WebSocket bağlanamazsa bu endpoint'i ~3 Hz çağırır.
+    """
+    t = time.time() - sim.start_wall
+    payload = generate_metrics(t)
+    payload["type"] = "tick"
+    # Yeni loglar (since'den sonrakiler)
+    total_logs = len(sim.logs)
+    if since < total_logs:
+        payload["new_logs"] = sim.logs[since:]
+    payload["log_index"] = total_logs
+    # Görünür uydular + timeline (polling'de her seferinde gönder)
+    payload["visible_satellites"] = sim.visible_cache
+    payload["handover_timeline"] = sim.handover_timeline
+    # Meta (TLE bilgisi) de ekle ki ilk poll'de header dolsun
+    sim.compute_tle_age()
+    payload["meta"] = {
+        "tle_source": sim.tle_source,
+        "tle_epoch": sim.tle_epoch_iso,
+        "tle_fetched_at": sim.tle_fetch_time_iso,
+        "tle_age_days": round(sim.tle_age_days, 2) if sim.tle_age_days is not None else None,
+        "tle_quality": sim.tle_quality,
+        "satellite_count": len(sim.satellites),
+    }
+    return payload
 
 
 @app.get("/api/handover_timeline")
@@ -990,12 +1065,7 @@ async def ws_simulation(websocket: WebSocket):
         print(f"[WS] hata: {e}")
 
 
-# ---------------------------------------------------------------------------
-# Statik frontend servisi (üretim modu)
-# Frontend build edilmişse (frontend/dist), onu kök dizinden servis et.
-# Böylece kullanıcı tek porttan (8000) hem arayüze hem API'ye erişir.
-# Tüm API/WS route'larından SONRA tanımlanır ki onlar öncelikli olsun.
-# ---------------------------------------------------------------------------
+
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
