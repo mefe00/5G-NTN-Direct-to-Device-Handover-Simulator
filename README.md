@@ -1,3 +1,14 @@
+---
+title: 5G-NTN Disaster Handover Simulator
+emoji: 🛰️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # 🛰️ 5G-NTN Disaster Handover Simulator
 
 **Afet durumları için 5G Non-Terrestrial Network (NTN) "Direct-to-Device" handover simülasyonu.**
@@ -17,6 +28,22 @@ Karasal mobil şebeke (gNodeB) bir afette çöktüğünde, kullanıcı cihazın�
 - **Otomatik konum** — tarayıcı Geolocation ile canlı konum + reverse-geocoding (şehir adı)
 - **Kanıt araçları** — n2yo.com canlı doğrulama linki, link budget hesap dökümü, CSV/JSON dışa aktarım
 - **Tek komutla çalışır** — Windows / Linux / macOS
+
+---
+
+## 🌐 Web'de Yayınlama (Render.com — Ücretsiz)
+
+Projeyi herkesin tarayıcıdan erişebileceği bir web linki haline getirmek için:
+
+1. Kodu GitHub'a yükleyin (zaten yüklüyse atlayın)
+2. [render.com](https://render.com)'a GitHub hesabınızla giriş yapın (kredi kartı gerekmez)
+3. **New → Blueprint** seçin, bu repo'yu seçin
+4. Render `render.yaml` dosyasını otomatik algılar; **Apply** deyin
+5. Birkaç dakikada build edip yayınlar, size bir `https://...onrender.com` linki verir
+
+> **Ücretsiz plan notu:** Servis 15 dakika kullanılmazsa uyur; sonraki ilk açılış ~30-50 saniye sürer (uyanma). Sonra normal hızlanır. Kredi kartı istenmez, sürpriz ücret çıkmaz.
+
+> **WebSocket fallback:** Arayüz, WebSocket bağlanamazsa otomatik olarak HTTP'ye geçer — yani hangi platformda olursa olsun veri akışı garanti çalışır.
 
 ---
 
